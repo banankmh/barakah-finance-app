@@ -87,4 +87,225 @@ async function authenticate(e){e.preventDefault();const email=$('#email').value.
 async function enter(){if(!state.session?.user)throw Error('لم يتم التحقق من الحساب');$('#auth').classList.add('hidden');$('#shell').classList.remove('hidden');$('#userEmail').textContent=state.session.user.email||'';await loadWorkspaces()}
 async function init(){$('#authForm').onsubmit=authenticate;$('#switchAuth').onclick=()=>{state.authMode=state.authMode==='login'?'signup':'login';$('#authBtn').textContent=state.authMode==='login'?'تسجيل الدخول':'إنشاء حساب';$('#switchAuth').textContent=state.authMode==='login'?'ليس لديك حساب؟ إنشاء حساب':'عندك حساب؟ تسجيل الدخول'};$('#logout').onclick=async()=>{try{await api('/auth/v1/logout',{method:'POST'})}catch{}state.session=null;saveSession();state.workspaces=[];state.workspace=null;state.tables={};$('#shell').classList.add('hidden');$('#auth').classList.remove('hidden')};$('#workspaceSelect').onchange=async e=>{state.workspace=state.workspaces.find(w=>w.id===e.target.value);sessionStorage.setItem('barakah-workspace',state.workspace.id);try{await loadData()}catch(err){toast(errMessage(err))}};$('#newWorkspace').onclick=()=>openEditor('workspace');$('#quickAdd').onclick=()=>openEditor('transaction');$('#closeDialog').onclick=$('#cancelDialog').onclick=()=>$('#dialog').close();$$('#nav button').forEach(b=>b.onclick=()=>goPage(b.dataset.page));window.addEventListener('online',()=>{$('#connection').textContent='● متصل';$('#connection').classList.remove('offline');if(state.session)loadData().catch(e=>toast(errMessage(e)))});window.addEventListener('offline',()=>{$('#connection').textContent='● دون إنترنت';$('#connection').classList.add('offline')});setInterval(()=>{if(state.session&&state.workspace&&navigator.onLine&&document.visibilityState==='visible'&&!$('#dialog').open)loadData().catch(()=>{})},30000);if(!navigator.onLine){$('#connection').textContent='● دون إنترنت';$('#connection').classList.add('offline')}
  try{state.session=JSON.parse(localStorage.getItem('barakah-auth')||'null')}catch{state.session=null}if(state.session){try{await refreshAuth();if(state.session)await enter()}catch(err){toast(errMessage(err));$('#shell').classList.add('hidden');$('#auth').classList.remove('hidden')}}if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{})}
-init();
+
+function setupPasswordRecovery() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const query = new URLSearchParams(window.location.search);
+
+  const accessToken = params.get('access_token');
+  const recoveryType = params.get('type');
+  const authError = params.get('error_description')
+    || query.get('error_description');
+
+  const appURL = window.location.origin + window.location.pathname;
+
+  // التعامل مع رابط استعادة كلمة المرور القادم من الإيميل
+  if (accessToken && recoveryType === 'recovery') {
+    // إزالة التوكن من شريط العنوان
+    window.history.replaceState({}, '', appURL);
+
+    const authScreen = document.getElementById('auth');
+    authScreen.classList.remove('hidden');
+
+    authScreen.innerHTML = `
+      <div class="auth-panel">
+        <div class="brand big">
+          <span class="brandmark">ب</span>
+          <span>بَرَكَة
+            <small>استعادة الحساب</small>
+          </span>
+        </div>
+
+        <h1>تعيين كلمة مرور جديدة</h1>
+        <p class="muted">
+          اكتبي كلمة مرور جديدة لحسابك في بركة.
+        </p>
+
+        <form id="recoveryForm" class="stack">
+          <label>
+            كلمة المرور الجديدة
+            <input
+              id="newPassword"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              required
+            >
+          </label>
+
+          <label>
+            تأكيد كلمة المرور
+            <input
+              id="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              required
+            >
+          </label>
+
+          <button
+            id="recoverySubmit"
+            class="btn primary"
+            type="submit"
+          >
+            حفظ كلمة المرور الجديدة
+          </button>
+        </form>
+
+        <p id="recoveryMessage" class="muted"></p>
+      </div>
+    `;
+
+    document.getElementById('recoveryForm')
+      .addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        const password = document.getElementById('newPassword').value;
+        const confirm = document.getElementById('confirmPassword').value;
+        const message = document.getElementById('recoveryMessage');
+        const button = document.getElementById('recoverySubmit');
+
+        if (password.length < 8) {
+          message.textContent = 'كلمة المرور يجب أن تتكون من 8 أحرف على الأقل.';
+          return;
+        }
+
+        if (password !== confirm) {
+          message.textContent = 'كلمتا المرور غير متطابقتين.';
+          return;
+        }
+
+        button.disabled = true;
+        message.textContent = 'جارٍ تحديث كلمة المرور...';
+
+        try {
+          const response = await fetch(URL_BASE + '/auth/v1/user', {
+            method: 'PUT',
+            headers: {
+              'apikey': PUBLIC_KEY,
+              'Authorization': 'Bearer ' + accessToken,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password })
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              result.msg ||
+              result.message ||
+              result.error_description ||
+              'تعذر تحديث كلمة المرور'
+            );
+          }
+
+          localStorage.removeItem('barakah-auth');
+
+          authScreen.innerHTML = `
+            <div class="auth-panel">
+              <div class="brand big">
+                <span class="brandmark">ب</span>
+                <span>بَرَكَة</span>
+              </div>
+
+              <h1>تم تغيير كلمة المرور بنجاح</h1>
+
+              <p class="muted">
+                يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.
+              </p>
+
+              <a class="btn primary" href="${appURL}">
+                العودة لتسجيل الدخول
+              </a>
+            </div>
+          `;
+
+        } catch (error) {
+          message.textContent = 'تعذر التحديث: ' + error.message;
+          button.disabled = false;
+        }
+      });
+
+    return;
+  }
+
+  // عرض رسالة واضحة عندما يكون رابط الإيميل غير صالح
+  if (authError) {
+    window.history.replaceState({}, '', appURL);
+  }
+
+  // تشغيل واجهة بركة المعتادة
+  init();
+
+  // إضافة زر نسيت كلمة المرور
+  const switchButton = document.getElementById('switchAuth');
+
+  if (switchButton) {
+    const forgotButton = document.createElement('button');
+
+    forgotButton.type = 'button';
+    forgotButton.className = 'plain';
+    forgotButton.textContent = 'نسيت كلمة المرور؟';
+    forgotButton.style.display = 'block';
+    forgotButton.style.margin = '14px auto';
+
+    switchButton.after(forgotButton);
+
+    forgotButton.addEventListener('click', async function () {
+      const emailInput = document.getElementById('email');
+      const email = emailInput.value.trim();
+
+      if (!email || !emailInput.checkValidity()) {
+        toast('اكتبي بريدك الإلكتروني الصحيح أولًا.');
+        emailInput.focus();
+        return;
+      }
+
+      forgotButton.disabled = true;
+
+      try {
+        const response = await fetch(
+          URL_BASE + '/auth/v1/recover?redirect_to=' +
+          encodeURIComponent(appURL),
+          {
+            method: 'POST',
+            headers: {
+              'apikey': PUBLIC_KEY,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.msg ||
+            result.message ||
+            result.error_description ||
+            'تعذر إرسال رابط الاستعادة'
+          );
+        }
+
+        toast(
+          'إذا كان البريد مسجلًا، ستصلك رسالة استعادة كلمة المرور. افحصي الوارد وغير المرغوب فيها.'
+        );
+
+      } catch (error) {
+        toast('تعذر إرسال الرابط: ' + error.message);
+      } finally {
+        forgotButton.disabled = false;
+      }
+    });
+  }
+
+  if (authError) {
+    toast('رابط الإيميل غير صالح أو انتهت صلاحيته. اطلبي رابطًا جديدًا.');
+  }
+}
+
+setupPasswordRecovery();
+
