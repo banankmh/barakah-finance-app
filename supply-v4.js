@@ -253,6 +253,7 @@ editorSchema = function (action) {
   return previousEditorSchema(action);
 };
 
+
 const previousBindContent = bindContent;
 
 bindContent = function () {
@@ -262,10 +263,24 @@ bindContent = function () {
     .forEach(button => {
       button.onclick = () => {
         window.barakahSelectedSupplyItem = button.dataset.item;
+
         openEditor('supplyBatch');
+
+        // المورد اختياري، ولا يجب منع الحفظ بدونه
+        const supplierField =
+          document.querySelector(
+            '#editor select[name="supplier_id"]'
+          );
+
+        if (supplierField) {
+          supplierField.required = false;
+          supplierField.value = '';
+          supplierField.removeAttribute('required');
+        }
       };
     });
 };
+
 
 const previousRender = render;
 
