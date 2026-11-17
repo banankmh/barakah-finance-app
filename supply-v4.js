@@ -195,7 +195,7 @@ editorSchema = function (action) {
         field('purchased_on', 'تاريخ الشراء', 'date',
           null, { default: iso() }),
         field('supplier_id', 'المورد', 'select',
-          options(list('parties'))),
+          options(list('parties')), { required: false }),
         field('quantity', 'الكمية المشتراة', 'number',
           null, { step: '0.001' }),
         field('purchase_unit_price', 'سعر شراء الوحدة',
@@ -210,8 +210,15 @@ editorSchema = function (action) {
 
         if (!item) throw Error('لم يتم العثور على الصنف');
 
-        if (Number(v.quantity) <= 0) {
+        const quantity = Number(v.quantity);
+        const unitPrice = Number(v.purchase_unit_price);
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
           throw Error('الكمية يجب أن تكون أكبر من صفر');
+        }
+
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+          throw Error('سعر الشراء يجب أن يكون صفرًا أو أكبر');
         }
 
         return insert('supply_purchase_batches', {
