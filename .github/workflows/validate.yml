@@ -1,0 +1,53 @@
+
+name: Barakah V4 - Code Validation
+
+on:
+  push:
+    branches:
+      - main
+      - feature/supply-profit-v4
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Barakah Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check supply-v4.js
+          node --check sw.js
+
+      - name: Check required application files
+        run: |
+          test -f index.html
+          test -f style.css
+          test -f app.js
+          test -f supply-v4.js
+          test -f sw.js
+          test -f manifest.webmanifest
+
+      - name: Check supply module integration
+        run: |
+          grep -q 'src="app.js"' index.html
+          grep -q 'src="supply-v4.js"' index.html
+          grep -q 'supply-v4.js' sw.js
+
+      - name: Validation completed
+        run: echo "Barakah code validation passed"
