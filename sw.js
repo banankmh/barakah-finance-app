@@ -6,6 +6,7 @@ const ASSETS = [
   './style.css',
   './app.js',
   './supply-v4.js',
+  './src/features/supply-orders/domain/profit.js',
   './manifest.webmanifest',
   './icon.svg'
 ];

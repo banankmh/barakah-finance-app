@@ -41,29 +41,8 @@ function supplyProfitPage() {
       batch => batch.order_item_id === item.id
     );
 
-    const purchased = related.reduce(
-      (total, batch) => total + Number(batch.quantity), 0
-    );
-
-    const totalCost = related.reduce(
-      (total, batch) =>
-        total +
-        Number(batch.quantity) *
-        Number(batch.purchase_unit_price), 0
-    );
-
-    const average = purchased > 0
-      ? totalCost / purchased
-      : null;
-
-    const delivered = Number(item.delivered_quantity);
-    const revenue = delivered * Number(item.selling_unit_price);
-
-    const complete = purchased >= delivered && purchased > 0;
-
-    const profit = complete
-      ? delivered * (Number(item.selling_unit_price) - average)
-      : null;
+    const { average, delivered, revenue, profit } =
+      BarakahSupplyProfit.calculate(item, related);
 
     const batchDetails = related.map(batch => `
       <div style="padding:6px 0;font-size:13px">
